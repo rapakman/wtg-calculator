@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WGT Pro Shot Calculator</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --card: #1e1e1e;
+            --accent: #4caf50;
+            --blue: #00bcd4;
+            --text: #ffffff;
+            --text-dim: #b3b3b3;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 12px;
+            user-select: none;
+        }
+        .container { max-width: 480px; margin: 0 auto; }
+        .card { background-color: var(--card); border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 12px; }
+        .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .form-group { flex: 1; display: flex; flex-direction: column; }
+        label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
+        input, select { padding: 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 16px; width: 100%; box-sizing: border-box; }
+        .dial-container { display: flex; flex-direction: column; align-items: center; margin: 12px 0; }
+        .dial { width: 120px; height: 120px; border-radius: 50%; border: 3px solid #555; position: relative; background: #252525; touch-action: none; cursor: pointer; }
+        .dial-center { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; position: absolute; top: 55px; left: 55px; }
+        .dial-arrow { width: 4px; height: 50px; background: var(--accent); position: absolute; bottom: 60px; left: 58px; transform-origin: bottom center; transform: rotate(0deg); }
+        .result-box { background: #252525; border-left: 5px solid var(--accent); padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+        .res-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px; }
+        .res-val { font-size: 20px; font-weight: bold; color: var(--accent); }
+        .btn { width: 100%; padding: 12px; background: #333; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: var(--card); padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; max-height: 80vh; overflow-y: auto; border: 1px solid #444; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .calibrate-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+        .calibrate-row { display: flex; align-items: center; justify-content: space-between; background: #252525; padding: 8px; border-radius: 6px; border: 1px solid #333; }
+        .calibrate-row span { font-weight: bold; font-size: 14px; }
+        .calibrate-row input { width: 80px; padding: 6px; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="card" style="border: 1px solid var(--accent); padding: 10px 15px;">
+        <div class="form-group">
+            <label style="color: var(--accent); font-weight: bold;">ACTIVE PROFILE SET</label>
+            <select id="profile-select" onchange="switchProfile(this.value)">
+                <option value="set1">Set 1: Standard Gear</option>
+                <option value="set2">Set 2: Bonus Clothes</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="form-row">
+            <div class="form-group">
+                <label>Auto-Selected Club</label>
+                <select id="calc-club" disabled style="background-color: #1e1e1e; color: var(--accent); font-weight: bold; border: 1px dashed var(--accent); opacity: 1; -webkit-text-fill-color: var(--accent);"></select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="distance">Target Distance (Yds)</label>
+                <input type="number" id="distance" value="150" pattern="[0-9]*" oninput="runEngine()">
+            </div>
+            <div class="form-group">
+                <label for="elevation">Elevation / Altitude (Feet)</label>
+                <input type="number" id="elevation" value="0" pattern="-?[0-9]*" oninput="runEngine()">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Elevation Adjusted Distance</label>
+                <div id="elev-adj-display" style="font-size: 16px; font-weight: bold; padding: 8px; background: #252525; border-radius: 6px; border: 1px solid #333; text-align: center;">150.0 yds</div>
+            </div>
+            <div class="form-group">
+                <label for="wind-speed">Wind Velocity (MPH)</label>
+                <input type="number" id="wind-speed" value="0" pattern="[0-9]*" oninput="runEngine()">
+            </div>
+        </div>
+
+        <div class="dial-container">
+            <div class="dial" id="wind-dial">
+                <div class="dial-center"></div>
+                <div class="dial-arrow" id="dial-arrow"></div>
+            </div>
+            <div id="angle-readout" style="margin-top: 8px; font-weight: bold; font-size: 13px; color: var(--text-dim);">0° Vector</div>
+        </div>
+
+        <div class="result-box">
+            <div class="res-row"><span>Plays-Like Goal:</span><span id="out-power" class="res-val">150.0 yds</span></div>
+            <div class="res-row"><span>Shot Power %:</span><span id="out-pct" class="res-val" style="color: #ff9800;">100%</span></div>
+            <div class="res-row"><span>Aim Shift Vector:</span><span id="out-drift" class="res-val" style="color: var(--blue);">0.0 yards</span></div>
+        </div>
+
+        <button class="btn" style="border-color: var(--accent); color: var(--accent);" onclick="toggleModal(true)">⚙ Edit Club Distances</button>
+    </div>
+</div>
+
+<div class="modal" id="settings-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 style="margin: 0; color: var(--accent);" id="modal-title">Set 1 Distances</h3>
+            <button class="btn" style="width: auto; padding: 6px 12px; margin: 0;" onclick="toggleModal(false)">Done</button>
+        </div>
+        <div class="calibrate-grid" id="calibration-zone"></div>
+    </div>
+</div>
+
+<script>
+    const defaultSet1 = [
+        { name: "Driver", maxDist: 260, windScale: 1.0 },
+        { name: "3 Wood", maxDist: 230, windScale: 1.1 },
+        { name: "5 Iron", maxDist: 180, windScale: 1.25 },
+        { name: "6 Iron", maxDist: 170, windScale: 1.3 },
+        { name: "7 Iron", maxDist: 150, windScale: 1.35 },
+        { name: "8 Iron", maxDist: 140, windScale: 1.4 },
+        { name: "9 Iron", maxDist: 130, windScale: 1.45 },
+        { name: "PW", maxDist: 120, windScale: 1.5 },
+        { name: "Sand Wedge", maxDist: 90, windScale: 1.7 },
+        { name: "Lob Wedge", maxDist: 65, windScale: 1.9 }
+    ];
+    const defaultSet2 = defaultSet1.map(c => ({ name: c.name, maxDist: Math.round(c.maxDist * 1.08), windScale: c.windScale }));
+    let activeKey = 'set1';
+    let profileData = JSON.parse(localStorage.getItem('wgt_final_profiles_v6')) || { set1: defaultSet1, set2: defaultSet2 };
+    let globalWindAngle = 0;
+
+    function switchProfile(val) {
+        activeKey = val;
+        document.getElementById('modal-title').innerHTML = val === 'set1' ? 'Set 1 Distances' : 'Set 2 Distances';
+        buildCalibrateUI();
+        runEngine();
+    }
+    function toggleModal(show) {
+        document.getElementById('settings-modal').style.display = show ? 'flex' : 'none';
+    }
+    function buildCalibrateUI() {
+        const zone = document.getElementById('calibration-zone');
+        zone.innerHTML = '';
+        profileData[activeKey].forEach((club, idx) => {
+            let row = document.createElement('div');
+            row.className = 'calibrate-row';
+            row.innerHTML = `<span>${club.name}</span><input type="number" pattern="[0-9]*" value="${club.maxDist}" oninput="updateClubDist(${idx}, this.value)">`;
+            zone.appendChild(row);
+        });
+    }
+    function updateClubDist(idx, val) {
+        let numeric = parseFloat(val) || 0;
+        profileData[activeKey][idx].maxDist = numeric;
+        profileData[activeKey][idx].windScale = numeric >= 250 ? 1.0 : Math.round((1.0 + (250 - numeric) * 0.005) * 100) / 100;
+        localStorage.setItem('wgt_final_profiles_v6', JSON.stringify(profileData));
+        runEngine();
+    }
+
+    const dial = document.getElementById('wind-dial');
+    const arrow = document.getElementById('dial-arrow');
+    const readout = document.getElementById('angle-readout');
+
+    function parseDial(e) {
+        const rect = dial.getBoundingClientRect();
+        const pointerX = e.touches ? e.touches.clientX : e.clientX;
+        const pointerY = e.touches ? e.touches.clientY : e.clientY;
+        let deg = Math.atan2(pointerY - (rect.top + rect.height/2), pointerX - (rect.left + rect.width/2)) * (180/Math.PI) + 90;
+        if (deg < 0) deg += 360;
+        globalWindAngle = Math.round(deg);
+        arrow.style.transform = `rotate(${globalWindAngle}deg)`;
+        readout.innerHTML = `${globalWindAngle}° Vector`;
+        runEngine();
+    }
+    dial.addEventListener('mousedown', () => window.addEventListener('mousemove', parseDial));
+    window.addEventListener('mouseup', () => window.removeEventListener('mousemove', parseDial));
